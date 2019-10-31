@@ -36,14 +36,16 @@ var (
 		"ok-looking", "meh", "strange-smelling", "musty",
 	}
 	Sizes = []string{
-		"full", "fun", "family", "kid", "baby", "American", "industrial", "elephant", "decent",
+		"full", "fun", "family", "kid", "baby", "American", "industrial", "elephant", "decent", "ginormous", "chungus",
 	}
 	Names = []string{
-		"Snickers", "Milky ways", "Mars bars", "Pods", "Bountys", "Cadburys", "Freddo Frogs", "Caramello Koalas", "Aero bars",
-		"Nerds", "Sour worms", "Sour Skittles", "Skittles", "Warheads", "Wizz Fizzes",
+		"Snickers", "Milky ways", "Mars bars", "Pods", "Bountys", "Cadburys", "Freddo Frogs", "Caramello Koalas", "Aero bars", "Kinder Surprises", "Ferrero Rochers",
+		"Nerds", "Sour worms", "Sour Skittles", "Skittles", "Warheads", "Wizz Fizzes", "Sour patch kids", "Sour patch kids freeze", "Redskins", "Gobstoppers", "Jawbreakers",
+		"White Rabbits", "Unreadable Chinese Lollies", "Fluffy Mochi", "Pocky",
 		"Minties", "5 gum",
-		"Grapes", "Apples",
+		"Grapes", "Apples", "Bananas",
 		"Toothbrushes", "Life lessons",
+		"Ferraris", "Lolis",
 	}
 )
 
@@ -119,6 +121,14 @@ func (w Weeners) GetTrickLeader() string {
 	return leader
 }
 
+// DeleteTreats deletes all treats from user's bag if they're naughty
+func (w Weeners) DeleteTreats(uid string) {
+	if weener, ok := w[uid]; ok {
+		weener.Treats = []Treat{}
+		w[uid] = weener
+	}
+}
+
 // GenLoli generates a random lolly in a random state to a user in the map
 //
 // Returns result of operation
@@ -143,16 +153,25 @@ func (w Weeners) GenLoli(uid string) string {
 
 	// roll to mark as tricked
 	if rand.Intn(2+len(weener.Treats)/10) == 0 {
+		// increment combo
+		weener.combo++
 		if weener.combo > weener.MaxCombo {
 			weener.MaxCombo = weener.combo
 		}
+
+		// update weener
 		halloweeners[uid] = weener
 		return "You got: **" + treat.String() + "**\n...keep going!" + Loli
 	}
 
-	// roll failed, trick the weener
+	// roll failed, trick the weener, update max combo, and reset combo
 	weener.tricked = true
 	halloweeners[uid] = weener
+	if weener.combo > weener.MaxCombo {
+		weener.MaxCombo = weener.combo
+	}
+
+	weener.combo = 0
 	return "You got: **" + treat.String() + "**\n...and have been tricked!" + Pumpkin
 }
 
@@ -203,24 +222,49 @@ func main() {
 
 		// handle commands
 		com := strings.ToLower(message[1:])
-		if com == "trick" {
+		switch com {
+		case "trick":
+			if msg.ChannelID != NotifChannel {
+				halloweeners.DeleteTreats(msg.Author.ID)
+				ses.ChannelMessageSend(msg.ChannelID, "**That's it, I'm confiscating all of your treats!**"+Pumpkin)
+				return
+			}
+
 			ses.ChannelMessageSend(msg.ChannelID, halloweeners.GenLoli(msg.Author.ID))
 			return
-		}
 
-		if com == "treat" {
+		case "treat":
+			if msg.ChannelID != NotifChannel {
+				halloweeners.DeleteTreats(msg.Author.ID)
+				ses.ChannelMessageSend(msg.ChannelID, "**That's it, I'm confiscating all of your treats!**"+Pumpkin)
+				return
+			}
+
 			weener, ok := halloweeners[msg.Author.ID]
 			if !ok || len(weener.Treats) == 0 {
 				ses.ChannelMessageSend(msg.ChannelID, "You have no treats!")
 				return
 			}
 
-			out := "You have " + strconv.Itoa(len(weener.Treats)) + " tricks:\n"
+			out := "Your current combo is [" + strconv.Itoa(weener.combo) + "]\n"
+			out += "Your max combo is [" + strconv.Itoa(weener.MaxCombo) + "]\n"
+			out += "You have " + strconv.Itoa(len(weener.Treats)) + " tricks:\n"
 			for _, treat := range weener.Treats {
 				out += treat.String() + "\n"
 			}
 			ses.ChannelMessageSend(msg.ChannelID, out)
 			return
+
+		case "help":
+			if msg.ChannelID != NotifChannel {
+				halloweeners.DeleteTreats(msg.Author.ID)
+				ses.ChannelMessageSend(msg.ChannelID, "**That's it, I'm confiscating all of your treats!**"+Pumpkin)
+				return
+			}
+
+			out := "`" + Prefix + "trick` Rolls for a randomised amount of some treats and has a small chance of allowing another roll. Once you are 'tricked', you must wait to be untricked. Untricking occurs every 15 minutes.\n"
+			out += "`" + Prefix + "treat` Shows the treats you've acquired and your current & max combos."
+			ses.ChannelMessageSend(msg.ChannelID, out)
 		}
 	})
 
@@ -239,13 +283,13 @@ func main() {
 		comboID := halloweeners.GetComboLeader()
 		comboUser, err := dgo.User(comboID)
 		if err == nil {
-			out += "\n" + Loli + "Current Combo Leader: " + " [" + strconv.Itoa(halloweeners[comboID].MaxCombo) + "]" + comboUser.Username
+			out += "\n" + Loli + "Current Combo Leader: " + " [" + strconv.Itoa(halloweeners[comboID].MaxCombo) + "] " + comboUser.Username
 		}
 
 		trickID := halloweeners.GetTrickLeader()
 		trickUser, err := dgo.User(trickID)
 		if err == nil {
-			out += "\n" + Loli + "Current Trick Leader: " + " [" + strconv.Itoa(len(halloweeners[trickID].Treats)) + "]" + trickUser.Username
+			out += "\n" + Loli + "Current Trick Leader: " + " [" + strconv.Itoa(len(halloweeners[trickID].Treats)) + "] " + trickUser.Username
 		}
 		dgo.ChannelMessageSend(NotifChannel, out)
 
