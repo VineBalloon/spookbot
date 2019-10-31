@@ -98,7 +98,7 @@ func (w Weeners) GetComboLeader() string {
 	max := 0
 	leader := ""
 	for _, v := range w {
-		if len(v.Treats) > max {
+		if v.MaxCombo > max {
 			leader = v.Uid
 			max = v.MaxCombo
 		}
